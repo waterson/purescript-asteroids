@@ -44,6 +44,8 @@ type Asteroid = {
     , dy   :: Number
     , r    :: Number
     , path :: [Number]
+    , spin :: Number
+    , dir  :: Number
     }
 
 type Missile = {
@@ -108,6 +110,8 @@ defaultShip w h = { x: w / 2, y: w / 2, dir: 0, dx: 0, dy: 0, r: 10 }
 -- |The maximum speed we'll allow for a ship.
 maxSpeed = 6.0
 
+twoPi = 2 * pi
+
 -- |Creates a randomly located asteroid somewhere on the canvas.
 randomAsteroid :: forall e. Number -> Number -> Eff ( random :: Random | e ) Asteroid
 randomAsteroid w h = do
@@ -116,7 +120,8 @@ randomAsteroid w h = do
   dx <- (*) <$> (randomRange 1 2) <*> randomSign
   dy <- (*) <$> (randomRange 1 2) <*> randomSign
   path <- replicateM 12 (randomRange 0.7 1.1)
-  return { x: x, y: y, dx: dx, dy: dy, r: 50, path: path }
+  spin <- randomRange (-0.1) 0.1
+  return { x: x, y: y, dx: dx, dy: dy, r: 50, path: path, spin: spin, dir: 0 }
       where randomRange lo hi = (\n -> lo + n * (hi - lo)) <$> random
             randomSign = (\n -> if n < 0.5 then (-1) else 1) <$> random
 
@@ -208,7 +213,7 @@ update state = do
       asteroids = do
         a <- state.asteroids
         guard $ not (any (flip hittest $ a) state.missiles)
-        [move state.w state.h a]
+        [move state.w state.h $ spin a]
 
       -- These asteroids have been hit: split 'em.
       asteroids' = do
@@ -312,6 +317,9 @@ hittest a b =
 -- |Clamps the value of `x` between `lo` and `hi`.
 clamp :: Number -> Number -> Number -> Number
 clamp lo hi x = max lo (min hi x)
+
+spin :: Asteroid -> Asteroid
+spin a = let spin = a.dir + a.spin in a { dir = if spin > twoPi then spin - twoPi else spin }
 
 -- |Moves a Moveable by updating it's `x` and `y` coordinates by `dx`
 -- and `dy`, respectively.
@@ -432,11 +440,13 @@ renderAsteroid ctx _ asteroid = do
 
   setLineWidth 1 ctx
   translate { translateX: asteroid.x, translateY: asteroid.y } ctx
+  rotate asteroid.dir ctx
+
   setStrokeStyle "#ffffff" ctx
   beginPath ctx
 
   let n = length asteroid.path
-      steps = map ((*) (2 * pi / n)) (1 .. n)
+      steps = map ((*) (twoPi / n)) (1 .. n)
       theta = fromJust $ last steps
       off = fromJust $ last asteroid.path
 
@@ -458,7 +468,7 @@ renderMissile :: forall e. Context2D -> Unit -> Missile -> Eff ( canvas :: Canva
 renderMissile ctx _ missile = do
   save ctx
   setFillStyle "#ffffff" ctx
-  fillPath ctx $ arc ctx { x: missile.x, y: missile.y, r: 2, start: 0, end: 2 * pi }
+  fillPath ctx $ arc ctx { x: missile.x, y: missile.y, r: 2, start: 0, end: twoPi }
   restore ctx
   return unit
 
