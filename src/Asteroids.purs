@@ -22,36 +22,36 @@ import Data.DOM.Simple.Events
 data Phase = GameOver | Playing Ship | Crashing Ship Number | Respawning Number
 
 type Moveable m = {
-      x :: Number
-    , y :: Number
-    , dx :: Number
-    , dy :: Number
-    , r :: Number | m }
+      x    :: Number
+    , y    :: Number
+    , dx   :: Number
+    , dy   :: Number
+    , r    :: Number | m }
 
 type Ship = {
-      x   :: Number
-    , y   :: Number
-    , dx  :: Number
-    , dy  :: Number
-    , r   :: Number
-    , dir :: Number
+      x    :: Number
+    , y    :: Number
+    , dx   :: Number
+    , dy   :: Number
+    , r    :: Number
+    , dir  :: Number
     }
 
 type Asteroid = {
-      x :: Number
-    , y :: Number
-    , dx :: Number
-    , dy :: Number
-    , r :: Number
+      x    :: Number
+    , y    :: Number
+    , dx   :: Number
+    , dy   :: Number
+    , r    :: Number
     , path :: [Number]
     }
 
 type Missile = {
-      x :: Number
-    , y :: Number
-    , dx :: Number
-    , dy :: Number
-    , r :: Number
+      x    :: Number
+    , y    :: Number
+    , dx   :: Number
+    , dy   :: Number
+    , r    :: Number
     , fuse :: Number
     }
 
@@ -83,7 +83,7 @@ main = do
   asteroids <- replicateM 10 (randomAsteroid w h)
 
   st <- newSTRef { w: w, h: h
-                 , phase: Respawning 0
+                 , phase: GameOver
                  , nships: 3
                  , score: 0
                  , asteroids: asteroids
@@ -92,34 +92,41 @@ main = do
 
   resize st
   addUIEventListener ResizeEvent (resize0 st) globalWindow
+
   addKeyboardEventListener KeydownEvent (keydown st) globalWindow
   addKeyboardEventListener KeyupEvent (keyup st) globalWindow
   addKeyboardEventListener KeypressEvent (keypress st) globalWindow
+
   setInterval globalWindow 33 $ tick st
+
   return unit
 
+-- |Returns a new ship in the middle of the canvas.
 defaultShip :: Number -> Number -> Ship
 defaultShip w h = { x: w / 2, y: w / 2, dir: 0, dx: 0, dy: 0, r: 10 }
 
+-- |The maximum speed we'll allow for a ship.
+maxSpeed = 6.0
+
+-- |Creates a randomly located asteroid somewhere on the canvas.
 randomAsteroid :: forall e. Number -> Number -> Eff ( random :: Random | e ) Asteroid
 randomAsteroid w h = do
-  x <- ((*) w) <$> random
-  y <- ((*) h) <$> random
+  x  <- randomRange 0 w
+  y  <- randomRange 0 h
   dx <- (*) <$> (randomRange 1 2) <*> randomSign
   dy <- (*) <$> (randomRange 1 2) <*> randomSign
   path <- replicateM 12 (randomRange 0.7 1.1)
   return { x: x, y: y, dx: dx, dy: dy, r: 50, path: path }
-      where randomRange lo hi = do
-                       n <- random
-                       return $ lo + n * (hi - lo)
-            randomSign = do
-                       n <- random
-                       return $ if n < 0.5 then (-1) else 1
+      where randomRange lo hi = (\n -> lo + n * (hi - lo)) <$> random
+            randomSign = (\n -> if n < 0.5 then (-1) else 1) <$> random
 
+-- |Thunk to attach resize to the ResizeEvent
 -- XXX WTF? Why do I need this?
 resize0 :: forall s e. STRef s State -> DOMEvent -> (Eff (st :: ST s, dom :: DOM, canvas :: Canvas | e) Unit)
 resize0 st _ = resize st
 
+-- |Handles window resizing by stretching the canvas to fit the
+-- viewport and updating our notion of how large the canvas is.
 resize :: forall s e. STRef s State -> (Eff (st :: ST s, dom :: DOM, canvas :: Canvas | e) Unit)
 resize st = do
   state <- readSTRef st
@@ -131,6 +138,7 @@ resize st = do
   modifySTRef st $ (\state -> state { w = w, h = h })
   return unit
 
+-- |Handles key presses for keys that can be held down.
 keydown :: forall s e. STRef s State -> DOMEvent -> Eff (st :: ST s, dom :: DOM | e) Unit
 keydown st event = do
   code <- keyCode event
@@ -144,6 +152,7 @@ keydown st event = do
 
   return unit
 
+-- |Handles key releases for keys that can be held down.
 keyup :: forall s e. STRef s State -> DOMEvent -> Eff (st :: ST s, dom :: DOM | e) Unit
 keyup st event = do
   code <- keyCode event
@@ -157,33 +166,44 @@ keyup st event = do
 
   return unit
 
-keypress :: forall s e. STRef s State -> DOMEvent -> Eff (st :: ST s, dom :: DOM, trace :: Trace | e) Unit
+-- |Handles single key presses.
+keypress :: forall s e. STRef s State -> DOMEvent -> Eff (st :: ST s, dom :: DOM, random :: Random | e) Unit
 keypress st event = do
+  state <- readSTRef st
   k <- key event
-  when (k == "l" || k == "L") fire
-      where fire = do
-              modifySTRef st $ \state ->
-                  case state.phase of
-                    Playing ship ->
-                        let x = ship.x
-                            y = ship.y
-                            dx = ship.dx + 8 * cos (ship.dir - pi/2)
-                            dy = ship.dy + 8 * sin (ship.dir - pi/2)
-                            missile = { x: x, y: y, dx: dx, dy: dy, r: 1, fuse: 50 }
-                        in state { missiles = (missile : state.missiles) }
+  case state.phase of
+    Playing ship | (k == "l" || k == "L") -> do
+      let x = ship.x
+          y = ship.y
+          dx = ship.dx + 8 * cos (ship.dir - pi/2)
+          dy = ship.dy + 8 * sin (ship.dir - pi/2)
+          missile = { x: x, y: y, dx: dx, dy: dy, r: 1, fuse: 50 }
 
-                    _ -> state
+      writeSTRef st $ state { missiles = (missile : state.missiles) }
+      return unit
 
-              return unit
+    GameOver | (k == " ") -> do
+      asteroids <- replicateM 10 (randomAsteroid state.w state.h)
+      writeSTRef st $ state { phase     = Respawning 11
+                            , nships    = 3
+                            , score     = 0
+                            , asteroids = asteroids
+                            }
+      return unit
 
+    _ -> return unit
+
+-- |Handles a single animation frame.
 tick :: forall s e. STRef s State -> Eff (st :: ST s, random :: Random, canvas :: Canvas | e ) Unit
 tick st = do
-  update st
-  render st
-
-update :: forall s e. STRef s State -> Eff (st :: ST s, random :: Random | e) Unit
-update st = do
   state <- readSTRef st
+  state' <- update state
+  writeSTRef st state'
+  render state
+
+-- |Updates the world state.
+update :: forall s e. State -> Eff (st :: ST s, random :: Random | e) State
+update state = do
   let -- These asteroids haven't been hit.
       asteroids = do
         a <- state.asteroids
@@ -235,18 +255,18 @@ update st = do
           -- Did the ship crash?
           crash = any (hittest ship') asteroids
 
-      writeSTRef st $ state { phase     = if crash then Crashing ship' 0 else Playing ship'
-                            , nships    = if crash then state.nships - 1 else state.nships
-                            , missiles  = missiles
-                            , asteroids = asteroids''
-                            , score     = state.score + points
-                            }
+      return $ state { phase     = if crash then Crashing ship' 0 else Playing ship'
+                     , nships    = if crash then state.nships - 1 else state.nships
+                     , missiles  = missiles
+                     , asteroids = asteroids''
+                     , score     = state.score + points
+                     }
 
     Playing ship -> do
       asteroids <- replicateM 10 (randomAsteroid state.w state.h)
-      writeSTRef st $ state { phase     = Respawning 33
-                            , asteroids = asteroids
-                            , missiles  = [ ] }
+      return $ state { phase     = Respawning 33
+                     , asteroids = asteroids
+                     , missiles  = [ ] }
 
     Crashing ship step -> do
       let ship' = ship { x = (state.w + ship.x + ship.dx) % state.w,
@@ -255,14 +275,14 @@ update st = do
                       if state.nships > 0 then Respawning 33 else GameOver
                   else Crashing ship' (step + 1)
 
-      writeSTRef st $ state { phase     = phase
-                            , missiles  = missiles
-                            , asteroids = asteroids'' }
+      return $ state { phase     = phase
+                     , missiles  = missiles
+                     , asteroids = asteroids'' }
 
     Respawning n | n > 0 -> do
-      writeSTRef st $ state { phase = Respawning (n-1)
-                            , missiles  = missiles
-                            , asteroids = asteroids'' }
+      return $ state { phase = Respawning (n-1)
+                     , missiles  = missiles
+                     , asteroids = asteroids'' }
 
     Respawning n -> do
       let center = (defaultShip state.w state.h) { r = 40 }
@@ -270,41 +290,38 @@ update st = do
                   then Respawning n
                   else Playing (defaultShip state.w state.h)
 
-      writeSTRef st $ state { phase     = phase
-                            , missiles  = missiles
-                            , asteroids = asteroids'' }
+      return $ state { phase     = phase
+                     , missiles  = missiles
+                     , asteroids = asteroids'' }
 
     GameOver -> do
-      writeSTRef st $ state { missiles = missiles
-                            , asteroids = asteroids'' }
+      return $ state { missiles  = missiles
+                     , asteroids = asteroids'' }
 
+-- |Ticks down the fuse on a missile.
+burn :: forall m. { fuse :: Number | m } -> { fuse :: Number | m }
+burn missile = missile { fuse = missile.fuse - 1.0 }
 
-  return unit
-
-        where
-          burn :: forall m. { fuse :: Number | m } -> { fuse :: Number | m }
-          burn missile = missile { fuse = missile.fuse - 1.0 }
-
-          maxSpeed = 6.0
-
+-- |Checks to see if two Moveable's have collided.
 hittest :: forall m n. Moveable m -> Moveable n -> Boolean
 hittest a b =
     let dx = a.x - b.x
         dy = a.y - b.y
     in sqrt ((dx * dx) + (dy * dy)) <= (a.r + b.r)
 
+-- |Clamps the value of `x` between `lo` and `hi`.
 clamp :: Number -> Number -> Number -> Number
 clamp lo hi x = max lo (min hi x)
 
+-- |Moves a Moveable by updating it's `x` and `y` coordinates by `dx`
+-- and `dy`, respectively.
 move :: forall m. Number -> Number -> Moveable m -> Moveable m
 move w h obj = obj { x = (w + obj.x + obj.dx) % w
                    , y = (h + obj.y + obj.dy) % h }
 
-
-
-render :: forall s e. STRef s State -> Eff (st :: ST s, canvas :: Canvas | e ) Unit
-render st = do
-  state <- readSTRef st
+-- |Renders the current state.
+render :: forall e. State -> Eff ( canvas :: Canvas | e ) Unit
+render state = do
   canvas <- getCanvasElementById "canvas"
   ctx <- getContext2D canvas
   setFillStyle "#000000" ctx
@@ -325,24 +342,15 @@ render st = do
 
   case state.phase of
     Playing ship    -> renderShip ctx ship "#ffffff" (state.controls.thrust /= 0)
-
     Respawning _    -> renderShip ctx (defaultShip state.w state.h) "#555555" false
-
     Crashing ship i -> renderCrash ctx ship i
-
-    GameOver        -> do let message = "Game Over"
-                          save ctx
-                          setFillStyle "#ffffff" ctx
-                          setFont "40px Hyperspace" ctx
-                          metrics <- measureText ctx message
-                          fillText ctx "Game Over" (state.w / 2 - metrics.width / 2) (state.h / 2)
-                          restore ctx
-                          return unit
+    GameOver        -> renderGameOver ctx state.w state.h
 
   foldM (renderAsteroid ctx) unit state.asteroids
   foldM (renderMissile ctx) unit state.missiles
   return unit
 
+-- |Renders a ship.
 renderShip :: forall e. Context2D -> Ship -> String -> Boolean -> Eff ( canvas :: Canvas | e ) Unit
 renderShip ctx ship color engines = do
   save ctx
@@ -368,6 +376,7 @@ renderShip ctx ship color engines = do
   restore ctx
   return unit
 
+-- |Renders an exploding ship.
 renderCrash :: forall e. Context2D -> Ship -> Number -> Eff ( canvas :: Canvas | e ) Unit
 renderCrash ctx ship i = do
   save ctx
@@ -416,6 +425,7 @@ renderCrash ctx ship i = do
 
   return unit
 
+-- |Renders an asteroid.
 renderAsteroid :: forall e. Context2D -> Unit -> Asteroid -> Eff ( canvas :: Canvas | e ) Unit
 renderAsteroid ctx _ asteroid = do
   save ctx
@@ -443,6 +453,7 @@ renderAsteroid ctx _ asteroid = do
   restore ctx
   return unit
 
+-- |Renders a missile.
 renderMissile :: forall e. Context2D -> Unit -> Missile -> Eff ( canvas :: Canvas | e ) Unit
 renderMissile ctx _ missile = do
   save ctx
@@ -450,3 +461,22 @@ renderMissile ctx _ missile = do
   fillPath ctx $ arc ctx { x: missile.x, y: missile.y, r: 2, start: 0, end: 2 * pi }
   restore ctx
   return unit
+
+-- |Renders the GAME OVER screen.
+renderGameOver :: forall e. Context2D -> Number -> Number -> Eff ( canvas :: Canvas | e ) Unit
+renderGameOver ctx w h = do
+  save ctx
+  setFillStyle "#ffffff" ctx
+
+  centerText "Game Over" 64 (-40)
+  centerText "Controls" 20 0
+  centerText "A = Rotate Left, S = Rotate Right" 14 20
+  centerText "K = Thrust, L = Fire" 14 40
+  centerText "Press the space bar to start" 16 120
+
+  restore ctx
+  return unit
+      where centerText text pixels y = do
+              setFont ((show pixels) ++ "px Hyperspace") ctx
+              metrics <- measureText ctx text
+              fillText ctx text (w / 2 - metrics.width / 2) (y + h / 2)
