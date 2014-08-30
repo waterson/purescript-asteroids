@@ -1,0 +1,15 @@
+{
+  "name": "purescript-asteroids",
+  "version": "0.0.0",
+  "description": "A variation of the arcade classic written for a web browser in PureScript.",
+  "main": "Gruntfile.js",
+  "devDependencies": {
+    "grunt": "^0.4.5",
+    "grunt-purescript": "^0.5.1"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "Chris Waterson <waterson@maubi.net>",
+  "license": "MIT"
+}

@@ -1,0 +1,31 @@
+{
+    "name": "purescript-asteroids",
+    "version": "0.1.0",
+    "description": "A variation of the arcade classic written for a web browser in PureScript.",
+    "main": "Asteroids.purs",
+    "authors": [
+        "Chris Waterson <waterson@maubi.net>"
+    ],
+    "license": "MIT",
+    "private": true,
+    "ignore": [
+        "**/.*",
+        "libs",
+        "node_modules",
+        "bower_components",
+        "test",
+        "tests"
+    ],
+    "dependencies": {
+        "purescript-arrays":               "*",
+        "purescript-foldable-traversable": "*",
+        "purescript-lists":                "*",
+        "purescript-math":                 "*",
+        "purescript-maybe":                "*",
+        "purescript-random":               "*",
+        "purescript-tuples":               "*",
+        "purescript-strings":              "*",
+        "purescript-simple-dom":           "waterson/purescript-simple-dom",
+        "purescript-canvas":               "waterson/purescript-canvas#69e42d0161"
+    }
+}
