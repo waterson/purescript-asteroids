@@ -26,6 +26,7 @@
         "purescript-tuples":               "*",
         "purescript-strings":              "*",
         "purescript-simple-dom":           "waterson/purescript-simple-dom",
-        "purescript-canvas":               "waterson/purescript-canvas#69e42d0161"
+        "purescript-canvas":               "*",
+        "purescript-webaudio":             "waterson/purescript-webaudio"
     }
 }

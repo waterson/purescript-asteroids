@@ -13,7 +13,7 @@ module.exports = function(grunt) {
                 },
                 all: {
                     src: ["<%=srcFiles%>"],
-                    dest: "dist/Main.js"
+                    dest: "html/asteroids.js"
                 }
             },
 
