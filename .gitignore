@@ -1,5 +1,5 @@
 *~
 .psci
 bower_components
-dist
 node_modules
+html/asteroids.js
