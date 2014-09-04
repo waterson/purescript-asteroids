@@ -19,6 +19,8 @@ import Data.DOM.Simple.Types
 import Data.DOM.Simple.Window
 import Data.DOM.Simple.Events
 
+import Audio.WebAudio.Types
+
 import Asteroids.Types
 import Asteroids.Sounds
 
@@ -32,8 +34,7 @@ main = do
 
   asteroids <- replicateM 10 (randomAsteroid w h)
 
-  sounds <- initSounds
-
+  sounds <- makeSounds
   st <- newSTRef { w: w, h: h
                  , phase: GameOver
                  , nships: 3
@@ -44,7 +45,7 @@ main = do
                  , sounds: sounds }
 
   resize st
-  addUIEventListener ResizeEvent (resize0 st) globalWindow
+  addUIEventListener UIResizeEvent (resize0 st) globalWindow
 
   addKeyboardEventListener KeydownEvent (keydown st) globalWindow
   addKeyboardEventListener KeyupEvent (keyup st) globalWindow
@@ -123,7 +124,7 @@ keyup st event = do
   return unit
 
 -- |Handles single key presses.
-keypress :: forall s e. STRef s State -> DOMEvent -> Eff (st :: ST s, dom :: DOM, random :: Random | e) Unit
+keypress :: forall s e. STRef s State -> DOMEvent -> Eff (st :: ST s, wau :: WebAudio, dom :: DOM, random :: Random | e) Unit
 keypress st event = do
   state <- readSTRef st
   k <- key event
@@ -136,6 +137,7 @@ keypress st event = do
           missile = { x: x, y: y, dx: dx, dy: dy, r: 1, fuse: 50 }
 
       writeSTRef st $ state { missiles = (missile : state.missiles) }
+      playBufferedSound state.sounds state.sounds.shootBuffer
       return unit
 
     GameOver | (k == " ") -> do
@@ -150,7 +152,7 @@ keypress st event = do
     _ -> return unit
 
 -- |Handles a single animation frame.
-tick :: forall s e. STRef s State -> Eff (st :: ST s, random :: Random, canvas :: Canvas | e ) Unit
+tick :: forall s e. STRef s State -> Eff (st :: ST s, random :: Random, canvas :: Canvas, wau :: WebAudio | e ) Unit
 tick st = do
   state <- readSTRef st
   state' <- update state
@@ -158,7 +160,7 @@ tick st = do
   render state
 
 -- |Updates the world state.
-update :: forall s e. State -> Eff (st :: ST s, random :: Random | e) State
+update :: forall s e. State -> Eff (st :: ST s, random :: Random, wau :: WebAudio | e) State
 update state = do
   let -- These asteroids haven't been hit.
       asteroids = do
@@ -208,8 +210,16 @@ update state = do
             guard $ any (flip hittest $ a) state.missiles
             [if a.r >= 50 then 20 else if a.r >= 25 then 50 else 100]
 
+          -- Any blowed up asteroids?
+          hits = do
+                 a <- state.asteroids
+                 m <- state.missiles
+                 [hittest m a]
+
           -- Did the ship crash?
           crash = any (hittest ship') asteroids
+
+      when (crash || any id hits) $ playBufferedSound state.sounds state.sounds.explosionBuffer
 
       return $ state { phase     = if crash then Crashing ship' 0 else Playing ship'
                      , nships    = if crash then state.nships - 1 else state.nships

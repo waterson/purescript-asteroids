@@ -1,5 +1,6 @@
 module Asteroids.Types where
 
+import Data.Maybe
 import Audio.WebAudio.Types
 
 data Phase = GameOver | Playing Ship | Crashing Ship Number | Respawning Number
@@ -47,10 +48,12 @@ type Controls = {
     }
 
 type Sounds = {
-      context        :: AudioContext
-    , beepOscillator :: OscillatorNode
-    , beepGain       :: GainNode
-    , masterGain     :: GainNode
+      context         :: AudioContext
+    , beepOscillator  :: OscillatorNode
+    , beepGain        :: GainNode
+    , shootBuffer     :: Maybe AudioBuffer
+    , explosionBuffer :: Maybe AudioBuffer
+    , masterGain      :: GainNode
     }
 
 type State = {

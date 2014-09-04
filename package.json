@@ -4,8 +4,9 @@
   "description": "A variation of the arcade classic written for a web browser in PureScript.",
   "main": "Gruntfile.js",
   "devDependencies": {
-    "grunt": "^0.4.5",
-    "grunt-purescript": "^0.5.1"
+    "grunt":            "^0.4.5",
+    "grunt-purescript": "^0.5.1",
+    "http-server":      "*"
   },
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
